@@ -1,23 +1,34 @@
 FROM php:7.4-apache
 
-RUN apt-get update && apt-get install -y libfreetype6-dev libjpeg62-turbo-dev libpng-dev && docker-php-ext-configure gd --with-freetype --with-jpeg && docker-php-ext-install -j$(nproc) gd
+# Instala dependências e extensões do PHP
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    imagemagick \
+    libmagickwand-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd mysqli exif zip
 
-RUN apt-get install -y wget
-
+# Define o diretório de trabalho
 WORKDIR /var/www/html
 
-RUN wget https://github.com/coppermine-gallery/cpg1.6.x/archive/v1.6.10.tar.gz
-RUN tar -xf v1.6.10.tar.gz
-RUN cp -r /var/www/html/cpg1.6.x-1.6.10 /var/www/html/coppermine
-RUN chmod -R 755 /var/www/html/coppermine
-RUN chmod -R 777 /var/www/html/coppermine/include
-RUN chmod -R 777 /var/www/html/coppermine/albums
-RUN rm cpg1.6.x-1.6.10 -d -r
-RUN rm v1.6.10.tar.gz
-RUN rm /etc/apache2/sites-enabled/*.conf
+# Baixa e extrai o Coppermine
+RUN wget -O coppermine.tar.gz https://github.com/coppermine-gallery/cpg1.6.x/archive/v1.6.10.tar.gz \
+    && tar -xzf coppermine.tar.gz \
+    && mv cpg1.6.x-1.6.10/* . \
+    && rm -rf cpg1.6.x-1.6.10 \
+    && rm coppermine.tar.gz
 
-COPY coppermine.conf /etc/apache2/sites-available/coppermine.conf
+# Ajusta permissões
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
-RUN a2ensite coppermine
-
+# Expõe a porta 80
 EXPOSE 80
+
+# Inicia o Apache
+CMD ["apache2-foreground"]
