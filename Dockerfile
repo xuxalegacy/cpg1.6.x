@@ -1,34 +1,47 @@
-FROM php:7.4-apache
+FROM php:8.1-apache
 
-# Instala dependências e extensões do PHP
+# Install PHP extensions required by Coppermine
 RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
+    libpng-dev \
+    libjpeg-dev \
+    libwebp-dev \
+    libfreetype6-dev \
+    libzip-dev \
+    libexif-dev \
     imagemagick \
     libmagickwand-dev \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    libpng-dev \
-    libzip-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd mysqli exif zip
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Define o diretório de trabalho
-WORKDIR /var/www/html
+# Configure and install GD with JPEG, PNG, WebP, FreeType support
+RUN docker-php-ext-configure gd \
+    --with-freetype \
+    --with-jpeg \
+    --with-webp
 
-# Baixa e extrai o Coppermine
-RUN wget -O coppermine.tar.gz https://github.com/coppermine-gallery/cpg1.6.x/archive/v1.6.10.tar.gz \
-    && tar -xzf coppermine.tar.gz \
-    && mv cpg1.6.x-1.6.10/* . \
-    && rm -rf cpg1.6.x-1.6.10 \
-    && rm coppermine.tar.gz
+RUN docker-php-ext-install -j$(nproc) \
+    gd \
+    mysqli \
+    exif \
+    zip \
+    gettext
 
-# Ajusta permissões
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+# Install ImageMagick PHP extension
+RUN pecl install imagick && docker-php-ext-enable imagick
 
-# Expõe a porta 80
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
+
+# Set document root permissions
+RUN chown -R www-data:www-data /var/www/html
+
+# PHP config: increase limits for photo uploads
+RUN echo "upload_max_filesize = 32M" >> /usr/local/etc/php/conf.d/coppermine.ini \
+    && echo "post_max_size = 64M" >> /usr/local/etc/php/conf.d/coppermine.ini \
+    && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/coppermine.ini \
+    && echo "max_execution_time = 120" >> /usr/local/etc/php/conf.d/coppermine.ini
+
+# Allow .htaccess overrides
+RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+
 EXPOSE 80
-
-# Inicia o Apache
-CMD ["apache2-foreground"]
